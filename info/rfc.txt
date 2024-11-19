@@ -1,0 +1,8 @@
+RFC 5321 :  Simple Mail Transfer Protocol (current standard)
+RFC 5322 :  Internet Message Format (defines the format of email messages)
+RFC 4954 :  SMTP Service Extension for Authentication
+RFC 3463 :  Enhanced Status Codes for SMTP
+RFC 3461 :  SMTP Service Extension for Delivery Status Notifications (DSNs)
+RFC 3207 :  SMTP Service Extension for Secure SMTP over Transport Layer Security (TLS)
+RFC 2821 :  Simple Mail Transfer Protocol (obsoleted by RFC 5321)
+RFC 821 :   Simple Mail Transfer Protocol (original specification, obsoleted by RFC 2821)
