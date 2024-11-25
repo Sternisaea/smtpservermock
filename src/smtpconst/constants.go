@@ -15,3 +15,16 @@ const (
 	PlainAuth        AuthenticationMethod = "plain"
 	CramMd5Auth      AuthenticationMethod = "cram-md5"
 )
+
+type Status int
+
+const (
+	VoidStatus Status = iota
+	HeloStatus
+	EhloStatus
+	StartTlsStatus
+	MailFromStatus
+	ReceiptToStatus
+	DataStatus
+	QuitStatus
+)

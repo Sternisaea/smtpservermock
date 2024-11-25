@@ -1,24 +1,52 @@
 package smtpservermock
 
 import (
-	"bufio"
+	"crypto/tls"
 	"errors"
 	"log"
 	"net"
+
+	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
 type SmtpServer struct {
-	security SmtpSecurity
+	name       string
+	security   smtpconst.Security
+	address    string
+	connection SmtpConnection
+	tlsconfig  *tls.Config
+
 	listener net.Listener
 }
 
-func NewSmtpServer(security SmtpSecurity) *SmtpServer {
-	return &SmtpServer{security: security}
+func NewSmtpServer(sec smtpconst.Security, servername, addr, certFile, keyFile string) (*SmtpServer, error) {
+	tlsconfig, err := getTLSConfig(sec, certFile, keyFile)
+	if err != nil {
+		return nil, err
+	}
+	smtpconn, err := getSmtpConnection(sec, servername, addr, tlsconfig)
+	if err != nil {
+		return nil, err
+	}
+	return &SmtpServer{name: servername, security: sec, address: addr, connection: smtpconn, tlsconfig: tlsconfig}, nil
+}
+
+func getTLSConfig(sec smtpconst.Security, certFile, keyFile string) (*tls.Config, error) {
+	switch sec {
+	case smtpconst.StartTlsSec, smtpconst.SslTlsSec:
+		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
+		if err != nil {
+			return nil, err
+		}
+		return &tls.Config{Certificates: []tls.Certificate{cert}}, nil
+	default:
+		return nil, nil
+	}
 }
 
 func (s *SmtpServer) ListenAndServe() error {
 	var err error
-	(*s).listener, err = (*s).security.SetupListener()
+	(*s).listener, err = (*s).connection.SetupListener()
 	if err != nil {
 		return err
 	}
@@ -41,54 +69,18 @@ func (s *SmtpServer) listening() {
 }
 
 func (s *SmtpServer) Shutdown() error {
-	return (*s).security.ShutdownListener((*s).listener)
+	return (*s).connection.ShutdownListener((*s).listener)
 }
 
 func (s *SmtpServer) handle(conn net.Conn) {
 	defer conn.Close()
 
-	//	reader := bufio.NewReader(conn)
-	writer := bufio.NewWriter(conn)
-
-	writer.WriteString("220 Mock SMTP Server\r\n")
-	writer.Flush()
-
-	// Process Commands
-
+	trsm := NewTransmission(conn, (*s).name)
+	if (*s).security == smtpconst.StartTlsSec {
+		trsm.SetStartTLSConfig((*s).tlsconfig)
+	}
+	trsm.SetCommands([]Command{&CmdEHLO{}, &CmdHELO{}, &CmdQuit{}, &CmdNOOP{}, &CmdMAILFROM{}, &CmdRCPTTO{}, &CmdSTARTTLS{}})
+	if err := trsm.Process(); err != nil {
+		log.Printf("Connection error: %s", err)
+	}
 }
-
-// #### STARTTLS ####
-// if strings.HasPrefix(line, "EHLO") {
-// 	writer.WriteString("250-Mock SMTP Server\r\n250-STARTTLS\r\n250 OK\r\n")
-// 	writer.Flush()
-// } else if strings.HasPrefix(line, "STARTTLS") {
-// 	writer.WriteString("220 Ready to start TLS\r\n")
-// 	writer.Flush()
-
-// 	tlsConn := tls.Server(conn, s.tlsConfig)
-// 	if err := tlsConn.Handshake(); err != nil {
-// 		log.Printf("TLS handshake failed: %s", err)
-// 		return
-// 	}
-
-// 	reader = bufio.NewReader(tlsConn)
-// 	writer = bufio.NewWriter(tlsConn)
-// } else if strings.HasPrefix(line, "AUTH PLAIN") {
-// 	writer.WriteString("235 Authentication successful\r\n")
-// 	writer.Flush()
-// } else {
-// 	writer.WriteString("500 Unrecognized command\r\n")
-// 	writer.Flush()
-// }
-
-// #### SSL-TLS / None ####
-// if strings.HasPrefix(line, "EHLO") {
-// 	writer.WriteString("250-Mock SMTP Server\r\n250-AUTH PLAIN\r\n250 OK\r\n")
-// 	writer.Flush()
-// } else if strings.HasPrefix(line, "AUTH PLAIN") {
-// 	writer.WriteString("235 Authentication successful\r\n")
-// 	writer.Flush()
-// } else {
-// 	writer.WriteString("500 Unrecognized command\r\n")
-// 	writer.Flush()
-// }

@@ -1,17 +1,21 @@
 package main
 
+import (
+	"time"
+
+	"github.com/Sternisaea/smtpservermock/src/smtpconst"
+	"github.com/Sternisaea/smtpservermock/src/smtpservermock"
+)
+
 func main() {
-	// addr := "127.0.0.1:25"
-	// server, err := smtpservermock.GetSMTPServer(smtpconst.NoSecurity, addr, "", "")
-	// if err != nil {
-	// 	panic(err)
-	// }
+	smtpserv, err := smtpservermock.NewSmtpServer(smtpconst.NoSecurity, "Mock SMTP Server", "127.0.0.1:2526", "", "")
+	if err != nil {
+		panic(err)
+	}
+	if err := smtpserv.ListenAndServe(); err != nil {
+		panic(err)
+	}
+	defer smtpserv.Shutdown()
 
-	// smtp := smtpservermock.NewMockSmtpServer(server, addr)
-	// if err := smtp.ListenAndServe(); err != nil {
-	// 	panic(err)
-	// }
-	// defer smtp.Shutdown()
-
-	// time.Sleep(900 * time.Second)
+	time.Sleep(900 * time.Second)
 }
