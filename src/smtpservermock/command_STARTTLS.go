@@ -4,8 +4,6 @@ import (
 	"bufio"
 	"crypto/tls"
 	"log"
-
-	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
 type CmdSTARTTLS struct{}
@@ -15,11 +13,11 @@ func (c *CmdSTARTTLS) GetPrefix() string {
 }
 
 func (c *CmdSTARTTLS) Execute(t *Transmission, arg string) error {
-	if !(*t).starttlsRequired {
-		return (*t).WriteResponse("503 Bad sequence of commands")
-	}
 	if (*t).starttlsActive {
 		return (*t).WriteResponse("503 Bad sequence of commands")
+	}
+	if (*t).connType != EhloType && (*t).connType != NoType {
+		return (*t).WriteResponse("500 Syntax error, command unrecognized")
 	}
 	if (*t).starttlsConfig == nil {
 		return (*t).WriteResponse("501 Syntax error (no parameters allowed)")
@@ -34,7 +32,9 @@ func (c *CmdSTARTTLS) Execute(t *Transmission, arg string) error {
 
 	(*t).reader = bufio.NewReader(tlsConn)
 	(*t).writer = bufio.NewWriter(tlsConn)
-	(*t).status = smtpconst.StartTlsStatus
+	(*t).clientName = ""
+	(*t).connType = EhloType
+	(*t).initCurrentMessage()
 	(*t).starttlsActive = true
-	return nil
+	return (*t).WriteResponse("220 Ready to start TLS")
 }

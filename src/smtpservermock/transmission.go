@@ -4,9 +4,19 @@ import (
 	"bufio"
 	"crypto/tls"
 	"net"
+	"regexp"
 	"strings"
+)
 
-	"github.com/Sternisaea/smtpservermock/src/smtpconst"
+var emailAngleBracketsRegex = regexp.MustCompile(`^<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>$`)
+
+type ConnectionType int
+
+const (
+	NoType ConnectionType = iota
+	HeloType
+	EhloType
+	QuitType
 )
 
 type Transmission struct {
@@ -15,21 +25,18 @@ type Transmission struct {
 	starttlsRequired bool
 	starttlsConfig   *tls.Config
 
-	reader         *bufio.Reader
-	writer         *bufio.Writer
-	clientName     string
-	status         smtpconst.Status
+	reader     *bufio.Reader
+	writer     *bufio.Writer
+	clientName string
+	msgStatus  MessageStatus
+
+	connType       ConnectionType
 	starttlsActive bool
 
 	// RECOGNIZED COMMANDS
-	commands []Command
-	messages []Message
-}
-
-type Message struct {
-	From string
-	To   []string
-	Data string
+	commands       []Command
+	messages       []*Message
+	currentMessage *Message
 }
 
 func NewTransmission(connection net.Conn, serverName string) *Transmission {
@@ -52,7 +59,7 @@ func (t *Transmission) SetCommands(cmds []Command) {
 }
 
 func (t *Transmission) Process() error {
-	(*t).status = smtpconst.VoidStatus
+	(*t).connType = NoType
 	(*t).WriteResponse("220 " + (*t).serverName)
 	for {
 		line, err := (*t).reader.ReadString('\n')
@@ -74,7 +81,7 @@ func (t *Transmission) Process() error {
 		if !found {
 			(*t).WriteResponse("500 Command not recognized")
 		}
-		if (*t).status == smtpconst.QuitStatus {
+		if (*t).connType == QuitType {
 			return nil
 		}
 	}
@@ -94,4 +101,9 @@ func (t *Transmission) WriteResponse(resp string) error {
 	}
 	(*t).writer.WriteString(resp)
 	return (*t).writer.Flush()
+}
+
+func (t *Transmission) initCurrentMessage() {
+	(*t).currentMessage = NewMessage()
+	(*t).msgStatus = EmptyMessage
 }

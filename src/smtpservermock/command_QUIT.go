@@ -1,7 +1,5 @@
 package smtpservermock
 
-import "github.com/Sternisaea/smtpservermock/src/smtpconst"
-
 type CmdQuit struct{}
 
 func (c *CmdQuit) GetPrefix() string {
@@ -9,7 +7,7 @@ func (c *CmdQuit) GetPrefix() string {
 }
 
 func (c *CmdQuit) Execute(t *Transmission, arg string) error {
-	(*t).status = smtpconst.QuitStatus
+	(*t).connType = QuitType
 	resp := "221 " + (*t).serverName + " Goodby " + (*t).clientName
 	return (*t).WriteResponse(resp)
 }
