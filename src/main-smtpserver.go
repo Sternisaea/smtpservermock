@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/Sternisaea/smtpservermock/src/smtpconst"
@@ -17,5 +18,9 @@ func main() {
 	}
 	defer smtpserv.Shutdown()
 
-	time.Sleep(900 * time.Second)
+	// time.Sleep(900 * time.Second)
+	time.Sleep(60 * time.Second)
+
+	cms := smtpserv.GetConnectionMessages()
+	fmt.Printf("%#v", cms)
 }

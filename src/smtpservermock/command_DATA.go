@@ -2,14 +2,14 @@ package smtpservermock
 
 import "strings"
 
-type CmdDATA struct{}
+type cmdDATA struct{}
 
-func (c *CmdDATA) GetPrefix() string {
+func (c *cmdDATA) getPrefix() string {
 	return "DATA"
 }
 
-func (c *CmdDATA) Execute(t *Transmission, arg string) error {
-	if err := (*t).WriteResponse("354 End message with ."); err != nil {
+func (c *cmdDATA) execute(t *transmission, arg string) error {
+	if err := (*t).writeResponse("354 End message with ."); err != nil {
 		return err
 	}
 	for {
@@ -20,9 +20,10 @@ func (c *CmdDATA) Execute(t *Transmission, arg string) error {
 		if strings.TrimSuffix(line, endOfLine) == "." {
 			break
 		}
-		(*t).currentMessage.Data += line
+		(*t).currentMessage.data += line
 	}
 	(*t).messages = append((*t).messages, (*t).currentMessage)
+	(*t).messageCh <- connMessage{id: (*t).id, message: *(*t).currentMessage}
 	(*t).initCurrentMessage()
-	return (*t).WriteResponse("250 Mail accepted")
+	return (*t).writeResponse("250 Mail accepted")
 }

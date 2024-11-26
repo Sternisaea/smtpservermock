@@ -1,21 +1,21 @@
 package smtpservermock
 
-type MessageStatus int
+type messageStatus int
 
 const (
-	_ MessageStatus = iota
-	EmptyMessage
-	MailFromMessage
-	ReceiptToMessage
-	DataMessage
+	_ messageStatus = iota
+	emptyMessage
+	mailFromMessage
+	receiptToMessage
+	dataMessage
 )
 
-type Message struct {
-	From string
-	To   []string
-	Data string
+type message struct {
+	from string
+	to   []string
+	data string
 }
 
-func NewMessage() *Message {
-	return &Message{}
+func newMessage() *message {
+	return &message{}
 }

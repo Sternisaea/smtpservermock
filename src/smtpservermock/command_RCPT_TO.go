@@ -4,26 +4,26 @@ import (
 	"strings"
 )
 
-type CmdRCPTTO struct{}
+type cmdRCPTTO struct{}
 
-func (c *CmdRCPTTO) GetPrefix() string {
+func (c *cmdRCPTTO) getPrefix() string {
 	return "RCPT TO"
 }
 
-func (c *CmdRCPTTO) Execute(t *Transmission, arg string) error {
-	if (*t).msgStatus != MailFromMessage && (*t).msgStatus != ReceiptToMessage {
-		return (*t).WriteResponse("503 Bad sequence of commands")
+func (c *cmdRCPTTO) execute(t *transmission, arg string) error {
+	if (*t).msgStatus != mailFromMessage && (*t).msgStatus != receiptToMessage {
+		return (*t).writeResponse("503 Bad sequence of commands")
 	}
 
 	texts := textAngleBracketsRegex.FindAllString(arg, -1)
 	if texts == nil || len(texts) > 1 || arg[0] != ':' {
-		return (*t).WriteResponse("501 Syntax error. Format: RCPT TO: <mailbox>")
+		return (*t).writeResponse("501 Syntax error. Format: RCPT TO: <mailbox>")
 	}
 	email := strings.TrimPrefix(strings.TrimSuffix(texts[0], ">"), "<")
 	// Optional: check email
-	(*t).currentMessage.To = append((*t).currentMessage.To, email)
-	(*t).msgStatus = ReceiptToMessage
-	return (*t).WriteResponse("250 OK")
+	(*t).currentMessage.to = append((*t).currentMessage.to, email)
+	(*t).msgStatus = receiptToMessage
+	return (*t).writeResponse("250 OK")
 }
 
 // RCPT TO:<recipient1@example.com>

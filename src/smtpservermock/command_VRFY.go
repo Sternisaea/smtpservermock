@@ -1,14 +1,14 @@
 package smtpservermock
 
-type CmdVRFY struct{}
+type cmdVRFY struct{}
 
-func (c *CmdVRFY) GetPrefix() string {
+func (c *cmdVRFY) getPrefix() string {
 	return "VRFY"
 }
 
-func (c *CmdVRFY) Execute(t *Transmission, arg string) error {
+func (c *cmdVRFY) execute(t *transmission, arg string) error {
 	resp := "252  Cannot VRFY user, but will accept message and attempt delivery"
-	return (*t).WriteResponse(resp)
+	return (*t).writeResponse(resp)
 }
 
 // User Name <local-part@domain>
