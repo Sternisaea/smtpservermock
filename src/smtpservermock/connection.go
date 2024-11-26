@@ -10,32 +10,32 @@ import (
 	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
-type SmtpConnection interface {
-	SetupListener() (net.Listener, error)
-	ShutdownListener(listener net.Listener) error
+type smtpConnection interface {
+	setupListener() (net.Listener, error)
+	shutdownListener(listener net.Listener) error
 }
 
-func getSmtpConnection(sec smtpconst.Security, servername, addr string, tlsconfig *tls.Config) (SmtpConnection, error) {
+func getSmtpConnection(sec smtpconst.Security, servername, addr string, tlsconfig *tls.Config) (smtpConnection, error) {
 	switch sec {
 	case smtpconst.NoSecurity, smtpconst.StartTlsSec:
-		return NewRegularConnection(servername, addr)
+		return newRegularConnection(servername, addr)
 	case smtpconst.SslTlsSec:
-		return NewTLSConnection(servername, addr, tlsconfig)
+		return newTLSConnection(servername, addr, tlsconfig)
 	default:
 		return nil, fmt.Errorf("unknown security type %s", sec)
 	}
 }
 
-type RegularConnection struct {
+type regularConnection struct {
 	servername string
 	addr       string
 }
 
-func NewRegularConnection(servername, addr string) (*RegularConnection, error) {
-	return &RegularConnection{servername: servername, addr: addr}, nil
+func newRegularConnection(servername, addr string) (*regularConnection, error) {
+	return &regularConnection{servername: servername, addr: addr}, nil
 }
 
-func (c *RegularConnection) SetupListener() (net.Listener, error) {
+func (c *regularConnection) setupListener() (net.Listener, error) {
 	listener, err := net.Listen("tcp", (*c).addr)
 	if err != nil {
 		return nil, fmt.Errorf("error starting server: %w", err)
@@ -44,7 +44,7 @@ func (c *RegularConnection) SetupListener() (net.Listener, error) {
 	return listener, nil
 
 }
-func (c *RegularConnection) ShutdownListener(listener net.Listener) error {
+func (c *regularConnection) shutdownListener(listener net.Listener) error {
 	if listener == nil {
 		return errors.New("server not running")
 	}
@@ -55,17 +55,17 @@ func (c *RegularConnection) ShutdownListener(listener net.Listener) error {
 	return nil
 }
 
-type TLSConnection struct {
+type tlsConnection struct {
 	servername string
 	addr       string
 	tlsConfig  *tls.Config
 }
 
-func NewTLSConnection(servername, addr string, tlsconfig *tls.Config) (*TLSConnection, error) {
-	return &TLSConnection{servername: servername, addr: addr, tlsConfig: tlsconfig}, nil
+func newTLSConnection(servername, addr string, tlsconfig *tls.Config) (*tlsConnection, error) {
+	return &tlsConnection{servername: servername, addr: addr, tlsConfig: tlsconfig}, nil
 }
 
-func (c *TLSConnection) SetupListener() (net.Listener, error) {
+func (c *tlsConnection) setupListener() (net.Listener, error) {
 	listener, err := tls.Listen("tcp", (*c).addr, (*c).tlsConfig)
 	if err != nil {
 		return nil, fmt.Errorf("error starting server: %w", err)
@@ -74,7 +74,7 @@ func (c *TLSConnection) SetupListener() (net.Listener, error) {
 	return listener, nil
 }
 
-func (c *TLSConnection) ShutdownListener(listener net.Listener) error {
+func (c *tlsConnection) shutdownListener(listener net.Listener) error {
 	if listener == nil {
 		return errors.New("server not running")
 	}

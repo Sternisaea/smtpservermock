@@ -2,32 +2,32 @@ package smtpservermock
 
 import "strings"
 
-type CmdMAILFROM struct{}
+type cmdMAILFROM struct{}
 
-func (c *CmdMAILFROM) GetPrefix() string {
+func (c *cmdMAILFROM) getPrefix() string {
 	return "MAIL FROM"
 }
 
-func (c *CmdMAILFROM) Execute(t *Transmission, arg string) error {
-	if (*t).connType != HeloType && (*t).connType != EhloType {
-		return (*t).WriteResponse("503 Bad sequence of commands")
+func (c *cmdMAILFROM) execute(t *transmission, arg string) error {
+	if (*t).connType != heloType && (*t).connType != ehloType {
+		return (*t).writeResponse("503 Bad sequence of commands")
 	}
 	if (*t).starttlsRequired && !(*t).starttlsActive {
-		return (*t).WriteResponse("530 Must issue a STARTTLS command first")
+		return (*t).writeResponse("530 Must issue a STARTTLS command first")
 	}
-	if (*t).msgStatus != EmptyMessage {
-		return (*t).WriteResponse("503 Bad sequence of commands")
+	if (*t).msgStatus != emptyMessage {
+		return (*t).writeResponse("503 Bad sequence of commands")
 	}
 
 	texts := textAngleBracketsRegex.FindAllString(arg, -1)
 	if texts == nil || arg[0] != ':' {
-		return (*t).WriteResponse("501 Syntax error. Format: MAIL FROM: <mailbox>")
+		return (*t).writeResponse("501 Syntax error. Format: MAIL FROM: <mailbox>")
 	}
 	email := strings.TrimPrefix(strings.TrimSuffix(texts[0], ">"), "<")
 	// Optional: check email
-	(*t).currentMessage.From = email
-	(*t).msgStatus = MailFromMessage
-	return (*t).WriteResponse("250 OK")
+	(*t).currentMessage.from = email
+	(*t).msgStatus = mailFromMessage
+	return (*t).writeResponse("250 OK")
 }
 
 // MAIL FROM:<sender@example.com>

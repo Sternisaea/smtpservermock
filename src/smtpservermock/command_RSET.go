@@ -1,12 +1,12 @@
 package smtpservermock
 
-type CmdRSET struct{}
+type cmdRSET struct{}
 
-func (c *CmdRSET) GetPrefix() string {
+func (c *cmdRSET) getPrefix() string {
 	return "RSET"
 }
 
-func (c *CmdRSET) Execute(t *Transmission, arg string) error {
+func (c *cmdRSET) execute(t *transmission, arg string) error {
 	(*t).initCurrentMessage()
-	return (*t).WriteResponse("250 OK")
+	return (*t).writeResponse("250 OK")
 }

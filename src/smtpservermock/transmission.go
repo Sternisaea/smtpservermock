@@ -17,56 +17,59 @@ var (
 
 //var emailRegex = regexp.MustCompile(`^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$`)
 
-type ConnectionType int
+type connectionType int
 
 const (
-	NoType ConnectionType = iota
-	HeloType
-	EhloType
-	QuitType
+	noType connectionType = iota
+	heloType
+	ehloType
+	quitType
 )
 
-type Transmission struct {
+type transmission struct {
 	security         smtpconst.Security
 	netConnection    net.Conn
 	serverName       string
 	starttlsRequired bool
 	starttlsConfig   *tls.Config
 
-	reader *bufio.Reader
-	writer *bufio.Writer
+	reader    *bufio.Reader
+	writer    *bufio.Writer
+	id        string
+	messageCh chan<- connMessage
 
 	clientName     string
-	connType       ConnectionType
+	connType       connectionType
 	starttlsActive bool
-	msgStatus      MessageStatus
+	msgStatus      messageStatus
 
-	// RECOGNIZED COMMANDS
-	commands       []Command
-	messages       []*Message
-	currentMessage *Message
+	commands       []command
+	messages       []*message
+	currentMessage *message
 }
 
-func NewTransmission(security smtpconst.Security, connection net.Conn, serverName string) *Transmission {
-	return &Transmission{
-		security:      smtpconst.NoSecurity,
+func newTransmission(security smtpconst.Security, connection net.Conn, serverName string, id string, msgCh chan<- connMessage) *transmission {
+	return &transmission{
+		security:      security,
 		netConnection: connection,
 		serverName:    serverName,
 		reader:        bufio.NewReader(connection),
 		writer:        bufio.NewWriter(connection),
+		id:            id,
+		messageCh:     msgCh,
 	}
 }
 
-func (t *Transmission) SetStartTLSConfig(config *tls.Config) {
+func (t *transmission) SetStartTLSConfig(config *tls.Config) {
 	(*t).starttlsRequired = true
 	(*t).starttlsActive = false
 	(*t).starttlsConfig = config
 }
 
-func (t *Transmission) Process() error {
-	(*t).connType = NoType
+func (t *transmission) Process() error {
+	(*t).connType = noType
 	(*t).setCommands()
-	if err := (*t).WriteResponse("220 " + (*t).serverName); err != nil {
+	if err := (*t).writeResponse("220 " + (*t).serverName); err != nil {
 		return err
 	}
 	for {
@@ -79,7 +82,7 @@ func (t *Transmission) Process() error {
 		found := false
 		for _, c := range (*t).commands {
 			if arg, ok := checkPrefix(c, line); ok {
-				if err := c.Execute(t, arg); err != nil {
+				if err := c.execute(t, arg); err != nil {
 					return err
 				}
 				found = true
@@ -87,26 +90,26 @@ func (t *Transmission) Process() error {
 			}
 		}
 		if !found {
-			if err := (*t).WriteResponse("500 Command not recognized"); err != nil {
+			if err := (*t).writeResponse("500 Command not recognized"); err != nil {
 				return err
 			}
 			continue
 		}
-		if (*t).connType == QuitType {
+		if (*t).connType == quitType {
 			return nil
 		}
 	}
 }
 
-func checkPrefix(c Command, line string) (string, bool) {
-	prefix := c.GetPrefix()
+func checkPrefix(c command, line string) (string, bool) {
+	prefix := c.getPrefix()
 	if len(line) < len(prefix) || line[:len(prefix)] != prefix {
 		return "", false
 	}
 	return strings.TrimLeft(line[len(prefix):], " "), true
 }
 
-func (t *Transmission) WriteResponse(resp string) error {
+func (t *transmission) writeResponse(resp string) error {
 	if !strings.HasSuffix(resp, endOfLine) {
 		resp += endOfLine
 	}
@@ -114,21 +117,21 @@ func (t *Transmission) WriteResponse(resp string) error {
 	return (*t).writer.Flush()
 }
 
-func (t *Transmission) initCurrentMessage() {
-	(*t).currentMessage = NewMessage()
-	(*t).msgStatus = EmptyMessage
+func (t *transmission) initCurrentMessage() {
+	(*t).currentMessage = newMessage()
+	(*t).msgStatus = emptyMessage
 }
 
-func (t *Transmission) setCommands() {
-	cmds := []Command{&CmdEHLO{}, &CmdHELO{}, &CmdQuit{}, &CmdNOOP{}, &CmdHELP{}, &CmdRSET{}, &CmdVRFY{}}
+func (t *transmission) setCommands() {
+	cmds := []command{&cmdEHLO{}, &cmdHELO{}, &cmdQuit{}, &cmdNOOP{}, &cmdHELP{}, &cmdRSET{}, &cmdVRFY{}}
 	if (*t).security == smtpconst.StartTlsSec && !(*t).starttlsActive {
-		cmds = append(cmds, []Command{&CmdSTARTTLS{}}...)
+		cmds = append(cmds, []command{&cmdSTARTTLS{}}...)
 	}
 	switch (*t).connType {
-	case HeloType:
-		cmds = append(cmds, []Command{&CmdMAILFROM{}, &CmdRCPTTO{}, &CmdDATA{}}...)
-	case EhloType:
-		cmds = append(cmds, []Command{&CmdMAILFROM{}, &CmdRCPTTO{}, &CmdDATA{}}...)
+	case heloType:
+		cmds = append(cmds, []command{&cmdMAILFROM{}, &cmdRCPTTO{}, &cmdDATA{}}...)
+	case ehloType:
+		cmds = append(cmds, []command{&cmdMAILFROM{}, &cmdRCPTTO{}, &cmdDATA{}}...)
 	}
 	(*t).commands = cmds
 }

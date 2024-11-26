@@ -1,19 +1,19 @@
 package smtpservermock
 
-type CmdHELO struct{}
+type cmdHELO struct{}
 
-func (c *CmdHELO) GetPrefix() string {
+func (c *cmdHELO) getPrefix() string {
 	return "HELO"
 }
 
-func (c *CmdHELO) Execute(t *Transmission, arg string) error {
+func (c *cmdHELO) execute(t *transmission, arg string) error {
 	if (*t).starttlsRequired && !(*t).starttlsActive {
-		return (*t).WriteResponse("530 Must issue a STARTTLS command first")
+		return (*t).writeResponse("530 Must issue a STARTTLS command first")
 	}
 	(*t).clientName = arg
-	(*t).connType = HeloType
+	(*t).connType = heloType
 	(*t).initCurrentMessage()
 	(*t).setCommands()
 	resp := "250 " + (*t).serverName + " Hello " + (*t).clientName
-	return (*t).WriteResponse(resp)
+	return (*t).writeResponse(resp)
 }

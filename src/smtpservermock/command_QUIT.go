@@ -1,13 +1,13 @@
 package smtpservermock
 
-type CmdQuit struct{}
+type cmdQuit struct{}
 
-func (c *CmdQuit) GetPrefix() string {
+func (c *cmdQuit) getPrefix() string {
 	return "QUIT"
 }
 
-func (c *CmdQuit) Execute(t *Transmission, arg string) error {
-	(*t).connType = QuitType
+func (c *cmdQuit) execute(t *transmission, arg string) error {
+	(*t).connType = quitType
 	resp := "221 " + (*t).serverName + " Goodby " + (*t).clientName
-	return (*t).WriteResponse(resp)
+	return (*t).writeResponse(resp)
 }

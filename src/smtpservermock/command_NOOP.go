@@ -2,16 +2,16 @@ package smtpservermock
 
 import "log"
 
-type CmdNOOP struct{}
+type cmdNOOP struct{}
 
-func (c *CmdNOOP) GetPrefix() string {
+func (c *cmdNOOP) getPrefix() string {
 	return "NOOP"
 }
 
-func (c *CmdNOOP) Execute(t *Transmission, arg string) error {
+func (c *cmdNOOP) execute(t *transmission, arg string) error {
 	if arg != "" {
 		log.Printf("%#v", arg)
-		return (*t).WriteResponse("501 Syntax error in parameters or arguments")
+		return (*t).writeResponse("501 Syntax error in parameters or arguments")
 	}
-	return (*t).WriteResponse("250 OK")
+	return (*t).writeResponse("250 OK")
 }
