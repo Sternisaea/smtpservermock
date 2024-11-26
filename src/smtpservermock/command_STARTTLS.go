@@ -35,6 +35,7 @@ func (c *CmdSTARTTLS) Execute(t *Transmission, arg string) error {
 	(*t).clientName = ""
 	(*t).connType = EhloType
 	(*t).initCurrentMessage()
+	(*t).setCommands()
 	(*t).starttlsActive = true
 	return (*t).WriteResponse("220 Ready to start TLS")
 }

@@ -6,9 +6,16 @@ import (
 	"net"
 	"regexp"
 	"strings"
+
+	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
-var emailAngleBracketsRegex = regexp.MustCompile(`^<([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})>$`)
+var (
+	endOfLine              = "\r\n"
+	textAngleBracketsRegex = regexp.MustCompile(`<(.*?)>`)
+)
+
+//var emailRegex = regexp.MustCompile(`^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$`)
 
 type ConnectionType int
 
@@ -20,18 +27,19 @@ const (
 )
 
 type Transmission struct {
+	security         smtpconst.Security
 	netConnection    net.Conn
 	serverName       string
 	starttlsRequired bool
 	starttlsConfig   *tls.Config
 
-	reader     *bufio.Reader
-	writer     *bufio.Writer
-	clientName string
-	msgStatus  MessageStatus
+	reader *bufio.Reader
+	writer *bufio.Writer
 
+	clientName     string
 	connType       ConnectionType
 	starttlsActive bool
+	msgStatus      MessageStatus
 
 	// RECOGNIZED COMMANDS
 	commands       []Command
@@ -39,8 +47,9 @@ type Transmission struct {
 	currentMessage *Message
 }
 
-func NewTransmission(connection net.Conn, serverName string) *Transmission {
+func NewTransmission(security smtpconst.Security, connection net.Conn, serverName string) *Transmission {
 	return &Transmission{
+		security:      smtpconst.NoSecurity,
 		netConnection: connection,
 		serverName:    serverName,
 		reader:        bufio.NewReader(connection),
@@ -54,19 +63,18 @@ func (t *Transmission) SetStartTLSConfig(config *tls.Config) {
 	(*t).starttlsConfig = config
 }
 
-func (t *Transmission) SetCommands(cmds []Command) {
-	(*t).commands = cmds
-}
-
 func (t *Transmission) Process() error {
 	(*t).connType = NoType
-	(*t).WriteResponse("220 " + (*t).serverName)
+	(*t).setCommands()
+	if err := (*t).WriteResponse("220 " + (*t).serverName); err != nil {
+		return err
+	}
 	for {
 		line, err := (*t).reader.ReadString('\n')
 		if err != nil {
 			return err
 		}
-		line = strings.TrimSuffix(line, "\r\n")
+		line = strings.TrimSuffix(line, endOfLine)
 
 		found := false
 		for _, c := range (*t).commands {
@@ -79,7 +87,10 @@ func (t *Transmission) Process() error {
 			}
 		}
 		if !found {
-			(*t).WriteResponse("500 Command not recognized")
+			if err := (*t).WriteResponse("500 Command not recognized"); err != nil {
+				return err
+			}
+			continue
 		}
 		if (*t).connType == QuitType {
 			return nil
@@ -96,8 +107,8 @@ func checkPrefix(c Command, line string) (string, bool) {
 }
 
 func (t *Transmission) WriteResponse(resp string) error {
-	if !strings.HasSuffix(resp, "\r\n") {
-		resp += "\r\n"
+	if !strings.HasSuffix(resp, endOfLine) {
+		resp += endOfLine
 	}
 	(*t).writer.WriteString(resp)
 	return (*t).writer.Flush()
@@ -106,4 +117,18 @@ func (t *Transmission) WriteResponse(resp string) error {
 func (t *Transmission) initCurrentMessage() {
 	(*t).currentMessage = NewMessage()
 	(*t).msgStatus = EmptyMessage
+}
+
+func (t *Transmission) setCommands() {
+	cmds := []Command{&CmdEHLO{}, &CmdHELO{}, &CmdQuit{}, &CmdNOOP{}, &CmdHELP{}, &CmdRSET{}, &CmdVRFY{}}
+	if (*t).security == smtpconst.StartTlsSec && !(*t).starttlsActive {
+		cmds = append(cmds, []Command{&CmdSTARTTLS{}}...)
+	}
+	switch (*t).connType {
+	case HeloType:
+		cmds = append(cmds, []Command{&CmdMAILFROM{}, &CmdRCPTTO{}, &CmdDATA{}}...)
+	case EhloType:
+		cmds = append(cmds, []Command{&CmdMAILFROM{}, &CmdRCPTTO{}, &CmdDATA{}}...)
+	}
+	(*t).commands = cmds
 }

@@ -75,11 +75,10 @@ func (s *SmtpServer) Shutdown() error {
 func (s *SmtpServer) handle(conn net.Conn) {
 	defer conn.Close()
 
-	trsm := NewTransmission(conn, (*s).name)
+	trsm := NewTransmission((*s).security, conn, (*s).name)
 	if (*s).security == smtpconst.StartTlsSec {
 		trsm.SetStartTLSConfig((*s).tlsconfig)
 	}
-	trsm.SetCommands([]Command{&CmdEHLO{}, &CmdHELO{}, &CmdQuit{}, &CmdNOOP{}, &CmdMAILFROM{}, &CmdRCPTTO{}, &CmdSTARTTLS{}})
 	if err := trsm.Process(); err != nil {
 		log.Printf("Connection error: %s", err)
 	}

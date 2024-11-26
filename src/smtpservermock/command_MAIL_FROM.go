@@ -1,8 +1,6 @@
 package smtpservermock
 
-import (
-	"strings"
-)
+import "strings"
 
 type CmdMAILFROM struct{}
 
@@ -20,13 +18,13 @@ func (c *CmdMAILFROM) Execute(t *Transmission, arg string) error {
 	if (*t).msgStatus != EmptyMessage {
 		return (*t).WriteResponse("503 Bad sequence of commands")
 	}
-	if !emailAngleBracketsRegex.MatchString(arg) {
-		return (*t).WriteResponse("501 Syntax error in parameters or arguments")
+
+	texts := textAngleBracketsRegex.FindAllString(arg, -1)
+	if texts == nil || arg[0] != ':' {
+		return (*t).WriteResponse("501 Syntax error. Format: MAIL FROM: <mailbox>")
 	}
-	email := strings.TrimPrefix(strings.TrimSuffix(arg, ">"), "<")
-
+	email := strings.TrimPrefix(strings.TrimSuffix(texts[0], ">"), "<")
 	// Optional: check email
-
 	(*t).currentMessage.From = email
 	(*t).msgStatus = MailFromMessage
 	return (*t).WriteResponse("250 OK")

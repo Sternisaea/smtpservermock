@@ -7,9 +7,9 @@ func (c *CmdHELP) GetPrefix() string {
 }
 
 func (c *CmdHELP) Execute(t *Transmission, arg string) error {
-	// return (*t).WriteResponse("250 OK")
-
-	// (*t).starttlsActive == true >> Do not display STARTTLS
-
-	return nil
+	resp := "250 Supported commands:"
+	for _, c := range (*t).commands {
+		resp += "  " + c.GetPrefix()
+	}
+	return (*t).WriteResponse(resp)
 }
