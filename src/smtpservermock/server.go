@@ -34,6 +34,12 @@ type connMessage struct {
 	message message
 }
 
+// NewSmtpServer creates a new instance of SmtpServer
+// - sec smtpconst.Security = type of security (e.g. No security, SSL-TLS, STARTTLS)
+// - servername string      = name of the server
+// - certFile string        = path to PEM encoded public key (leave empty if no security)
+// - keyFile string         = path to PEM encoded privat key (leave empty if no security)
+// An error is returned for an unknown security type or invalid keys
 func NewSmtpServer(sec smtpconst.Security, servername, addr, certFile, keyFile string) (*SmtpServer, error) {
 	tlsconfig, err := getTLSConfig(sec, certFile, keyFile)
 	if err != nil {
@@ -60,6 +66,8 @@ func getTLSConfig(sec smtpconst.Security, certFile, keyFile string) (*tls.Config
 	}
 }
 
+// ListenAndServe starts the SMTP server and begins listening for incoming connections.
+// An error is returned if there was an issue setting up the listener.
 func (s *SmtpServer) ListenAndServe() error {
 	var err error
 	(*s).listener, err = (*s).connection.setupListener()
@@ -88,6 +96,8 @@ func (s *SmtpServer) listening(msgCh chan<- connMessage) {
 	}
 }
 
+// Shutdown gracefully shuts down the SMTP server
+// It returns an error if there was an issue shutting down the server.
 func (s *SmtpServer) Shutdown() error {
 	return (*s).connection.shutdownListener((*s).listener)
 }
@@ -116,6 +126,8 @@ func (s *SmtpServer) handleMessages(msgCh <-chan connMessage) {
 	}
 }
 
+// GetConnectionMessages returns the e-mail messages received by the SMTP Server
+// For every connection an unique GUID is created
 func (s *SmtpServer) GetConnectionMessages() ConnectionMessages {
 	return (*s).connectionMessages
 }
