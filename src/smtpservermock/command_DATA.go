@@ -17,6 +17,7 @@ func (c *cmdDATA) execute(t *transmission, arg string) error {
 		if err != nil {
 			return err
 		}
+		(*t).writeRaw(line)
 		if strings.TrimSuffix(line, endOfLine) == "." {
 			break
 		}

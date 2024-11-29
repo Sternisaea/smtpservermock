@@ -37,18 +37,20 @@ type transmission struct {
 	writer    *bufio.Writer
 	id        string
 	messageCh chan<- connMessage
+	rawTextCh chan<- connRaw
 
 	clientName     string
 	connType       connectionType
 	starttlsActive bool
 	msgStatus      messageStatus
 
-	commands       []command
+	commands []command
+
 	messages       []*message
 	currentMessage *message
 }
 
-func newTransmission(security smtpconst.Security, connection net.Conn, serverName string, id string, msgCh chan<- connMessage) *transmission {
+func newTransmission(security smtpconst.Security, connection net.Conn, serverName string, id string, msgCh chan<- connMessage, rawCh chan<- connRaw) *transmission {
 	return &transmission{
 		security:      security,
 		netConnection: connection,
@@ -57,6 +59,7 @@ func newTransmission(security smtpconst.Security, connection net.Conn, serverNam
 		writer:        bufio.NewWriter(connection),
 		id:            id,
 		messageCh:     msgCh,
+		rawTextCh:     rawCh,
 	}
 }
 
@@ -77,6 +80,7 @@ func (t *transmission) Process() error {
 		if err != nil {
 			return err
 		}
+		(*t).writeRaw(line)
 		line = strings.TrimSuffix(line, endOfLine)
 
 		found := false
@@ -113,8 +117,13 @@ func (t *transmission) writeResponse(resp string) error {
 	if !strings.HasSuffix(resp, endOfLine) {
 		resp += endOfLine
 	}
+	(*t).writeRaw(resp)
 	(*t).writer.WriteString(resp)
 	return (*t).writer.Flush()
+}
+
+func (t *transmission) writeRaw(rawtext string) {
+	(*t).rawTextCh <- connRaw{id: (*t).id, rawtext: rawtext}
 }
 
 func (t *transmission) initCurrentMessage() {

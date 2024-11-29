@@ -20,6 +20,7 @@ type SmtpServer struct {
 
 	listener           net.Listener
 	connectionMessages ConnectionMessages
+	connectionRawText  ConnectionRawText
 }
 
 type ConnectionMessages map[string][]CompletedMessage
@@ -30,9 +31,16 @@ type CompletedMessage struct {
 	Data string
 }
 
+type ConnectionRawText map[string][]string
+
 type connMessage struct {
 	id      string
 	message message
+}
+
+type connRaw struct {
+	id      string
+	rawtext string
 }
 
 // NewSmtpServer creates a new instance of SmtpServer
@@ -51,7 +59,8 @@ func NewSmtpServer(sec smtpconst.Security, servername, addr, certFile, keyFile s
 		return nil, err
 	}
 	conMsgs := make(ConnectionMessages)
-	return &SmtpServer{name: servername, security: sec, address: addr, connection: smtpconn, tlsconfig: tlsconfig, connectionMessages: conMsgs}, nil
+	conRawTexts := make(ConnectionRawText)
+	return &SmtpServer{name: servername, security: sec, address: addr, connection: smtpconn, tlsconfig: tlsconfig, connectionMessages: conMsgs, connectionRawText: conRawTexts}, nil
 }
 
 func getTLSConfig(sec smtpconst.Security, certFile, keyFile string) (*tls.Config, error) {
@@ -77,13 +86,16 @@ func (s *SmtpServer) ListenAndServe() error {
 	}
 
 	msgCh := make(chan connMessage)
+	rawCh := make(chan connRaw)
 	go s.handleMessages(msgCh)
-	go s.listening(msgCh)
+	go s.handleRawText(rawCh)
+	go s.listening(msgCh, rawCh)
 	return nil
 }
 
-func (s *SmtpServer) listening(msgCh chan<- connMessage) {
+func (s *SmtpServer) listening(msgCh chan<- connMessage, rawCh chan<- connRaw) {
 	defer close(msgCh)
+	defer close(rawCh)
 	for {
 		conn, err := (*s).listener.Accept()
 		if err != nil {
@@ -93,7 +105,7 @@ func (s *SmtpServer) listening(msgCh chan<- connMessage) {
 			log.Printf("Connection error: %s", err)
 			return
 		}
-		go s.handle(conn, msgCh)
+		go s.handle(conn, msgCh, rawCh)
 	}
 }
 
@@ -103,11 +115,11 @@ func (s *SmtpServer) Shutdown() error {
 	return (*s).connection.shutdownListener((*s).listener)
 }
 
-func (s *SmtpServer) handle(conn net.Conn, msgCh chan<- connMessage) {
+func (s *SmtpServer) handle(conn net.Conn, msgCh chan<- connMessage, rawCh chan<- connRaw) {
 	defer conn.Close()
 
 	id := uuid.New().String()
-	trsm := newTransmission((*s).security, conn, (*s).name, id, msgCh)
+	trsm := newTransmission((*s).security, conn, (*s).name, id, msgCh, rawCh)
 	if (*s).security == smtpconst.StartTlsSec {
 		trsm.SetStartTLSConfig((*s).tlsconfig)
 	}
@@ -131,8 +143,20 @@ func (s *SmtpServer) handleMessages(msgCh <-chan connMessage) {
 	}
 }
 
+func (s *SmtpServer) handleRawText(rawCh <-chan connRaw) {
+	for connRaw := range rawCh {
+		(*s).connectionRawText[connRaw.id] = append((*s).connectionRawText[connRaw.id], connRaw.rawtext)
+	}
+}
+
 // GetConnectionMessages returns the e-mail messages received by the SMTP Server
 // For every connection an unique GUID is created
 func (s *SmtpServer) GetConnectionMessages() ConnectionMessages {
 	return (*s).connectionMessages
+}
+
+// GetRawText returns the e-mail commands received and sent by the SMTP Server
+// For every connection an unique GUID is created
+func (s *SmtpServer) GetRawText() ConnectionRawText {
+	return (*s).connectionRawText
 }

@@ -19,8 +19,16 @@ func main() {
 	defer smtpserv.Shutdown()
 
 	// time.Sleep(900 * time.Second)
-	time.Sleep(60 * time.Second)
+	time.Sleep(120 * time.Second)
 
 	cms := smtpserv.GetConnectionMessages()
-	fmt.Printf("%#v", cms)
+	fmt.Printf("%#v\n\n", cms)
+
+	craws := smtpserv.GetRawText()
+	for c, lns := range craws {
+		for _, l := range lns {
+			fmt.Printf("%s  %s", c, l)
+		}
+	}
+
 }
