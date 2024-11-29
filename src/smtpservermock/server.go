@@ -3,6 +3,7 @@ package smtpservermock
 import (
 	"crypto/tls"
 	"errors"
+	"io"
 	"log"
 	"net"
 
@@ -111,7 +112,11 @@ func (s *SmtpServer) handle(conn net.Conn, msgCh chan<- connMessage) {
 		trsm.SetStartTLSConfig((*s).tlsconfig)
 	}
 	if err := trsm.Process(); err != nil {
-		log.Printf("Connection error: %s", err)
+		if err == io.EOF {
+			log.Printf("Connection closed by client (EOF)")
+		} else {
+			log.Printf("Connection error: %s", err)
+		}
 	}
 }
 
