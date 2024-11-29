@@ -9,7 +9,7 @@ import (
 type cmdSTARTTLS struct{}
 
 func (c *cmdSTARTTLS) getPrefix() string {
-	return "HELO"
+	return "STARTTLS"
 }
 
 func (c *cmdSTARTTLS) execute(t *transmission, arg string) error {
