@@ -3,7 +3,6 @@ package smtpservermock
 import (
 	"bufio"
 	"crypto/tls"
-	"log"
 )
 
 type cmdSTARTTLS struct{}
@@ -23,13 +22,10 @@ func (c *cmdSTARTTLS) execute(t *transmission, arg string) error {
 		return (*t).writeResponse("501 Syntax error (no parameters allowed)")
 	}
 
-	tlsConn := tls.Server((*t).netConnection, (*t).starttlsConfig)
-	if err := tlsConn.Handshake(); err != nil {
-		log.Printf("STARTTLS handshake error: %s", err)
-		(*t).starttlsActive = false
-		return (*t).writeResponse("454 TLS not available due to temporary reason")
+	if err := (*t).writeResponse("220 Ready to start TLS"); err != nil {
+		return err
 	}
-
+	tlsConn := tls.Server((*t).netConnection, (*t).starttlsConfig)
 	(*t).reader = bufio.NewReader(tlsConn)
 	(*t).writer = bufio.NewWriter(tlsConn)
 	(*t).clientName = ""
@@ -37,5 +33,5 @@ func (c *cmdSTARTTLS) execute(t *transmission, arg string) error {
 	(*t).initCurrentMessage()
 	(*t).setCommands()
 	(*t).starttlsActive = true
-	return (*t).writeResponse("220 Ready to start TLS")
+	return nil
 }
