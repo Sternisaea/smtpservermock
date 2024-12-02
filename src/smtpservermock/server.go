@@ -43,12 +43,9 @@ type connRaw struct {
 	rawtext string
 }
 
-// NewSmtpServer creates a new instance of SmtpServer
-// - sec smtpconst.Security = type of security (e.g. No security, SSL-TLS, STARTTLS)
-// - servername string      = name of the server
-// - certFile string        = path to PEM encoded public key (leave empty if no security)
-// - keyFile string         = path to PEM encoded privat key (leave empty if no security)
-// An error is returned for an unknown security type or invalid keys
+// NewSmtpServer creates a new instance of SmtpServer. Parameters are the type of security (e.g. No security, SSL-TLS, STARTTLS), a servername,
+// the server address (mail.example.com:587), path to PEM encoded public key and path to PEM encoded privat key.
+// Leave the paths empty if no security is applied. An error is returned for an unknown security type or invalid keys
 func NewSmtpServer(sec smtpconst.Security, servername, addr, certFile, keyFile string) (*SmtpServer, error) {
 	tlsconfig, err := getTLSConfig(sec, certFile, keyFile)
 	if err != nil {
@@ -70,7 +67,9 @@ func getTLSConfig(sec smtpconst.Security, certFile, keyFile string) (*tls.Config
 		if err != nil {
 			return nil, err
 		}
-		return &tls.Config{Certificates: []tls.Certificate{cert}}, nil
+		return &tls.Config{
+			Certificates: []tls.Certificate{cert},
+		}, nil
 	default:
 		return nil, nil
 	}
