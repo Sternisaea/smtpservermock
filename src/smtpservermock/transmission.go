@@ -111,7 +111,7 @@ func (t *transmission) Process() error {
 
 func checkPrefix(c command, line string) (string, bool) {
 	prefix := c.getPrefix()
-	if len(line) < len(prefix) || line[:len(prefix)] != prefix {
+	if len(line) < len(prefix) || strings.ToUpper(line[:len(prefix)]) != prefix {
 		return "", false
 	}
 	return strings.TrimLeft(line[len(prefix):], " "), true
