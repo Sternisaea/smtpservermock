@@ -144,7 +144,7 @@ func (t *transmission) setCommands() {
 	case heloType:
 		cmds = append(cmds, []command{&cmdMAILFROM{}, &cmdRCPTTO{}, &cmdDATA{}}...)
 	case ehloType:
-		cmds = append(cmds, []command{&cmdMAILFROM{}, &cmdRCPTTO{}, &cmdDATA{}}...)
+		cmds = append(cmds, []command{&cmdMAILFROM{}, &cmdRCPTTO{}, &cmdDATA{}, &cmdAUTH{}}...)
 	}
 	(*t).commands = cmds
 }
