@@ -3,6 +3,7 @@ package smtpservermock
 import (
 	"bufio"
 	"crypto/tls"
+	"fmt"
 	"net"
 	"regexp"
 	"strings"
@@ -27,11 +28,10 @@ const (
 )
 
 type transmission struct {
-	security         smtpconst.Security
-	netConnection    net.Conn
-	serverName       string
-	starttlsRequired bool
-	starttlsConfig   *tls.Config
+	security       smtpconst.Security
+	netConnection  net.Conn
+	serverName     string
+	starttlsConfig *tls.Config
 
 	reader    *bufio.Reader
 	writer    *bufio.Writer
@@ -64,7 +64,6 @@ func newTransmission(security smtpconst.Security, connection net.Conn, serverNam
 }
 
 func (t *transmission) SetStartTLSConfig(config *tls.Config) {
-	(*t).starttlsRequired = true
 	(*t).starttlsActive = false
 	(*t).starttlsConfig = config
 }
@@ -75,6 +74,7 @@ func (t *transmission) Process() error {
 	if err := (*t).writeResponse("220 " + (*t).serverName); err != nil {
 		return err
 	}
+
 	for {
 		line, err := (*t).reader.ReadString('\n')
 		if err != nil {
@@ -94,7 +94,11 @@ func (t *transmission) Process() error {
 			}
 		}
 		if !found {
-			if err := (*t).writeResponse("500 Command not recognized"); err != nil {
+			cmd := ""
+			if words := strings.Fields(line); len(words) > 0 {
+				cmd = words[0]
+			}
+			if err := (*t).writeResponse("500 Command " + cmd + " not recognized"); err != nil {
 				return err
 			}
 			continue
