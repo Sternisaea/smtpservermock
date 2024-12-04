@@ -3,7 +3,6 @@ package smtpservermock
 import (
 	"bufio"
 	"crypto/tls"
-	"fmt"
 	"net"
 	"regexp"
 	"strings"
@@ -15,8 +14,6 @@ var (
 	endOfLine              = "\r\n"
 	textAngleBracketsRegex = regexp.MustCompile(`<(.*?)>`)
 )
-
-//var emailRegex = regexp.MustCompile(`^([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})$`)
 
 type connectionType int
 
