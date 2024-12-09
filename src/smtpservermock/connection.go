@@ -6,8 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net"
-
-	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
 type smtpConnection interface {
@@ -15,11 +13,11 @@ type smtpConnection interface {
 	shutdownListener(listener net.Listener) error
 }
 
-func getSmtpConnection(sec smtpconst.Security, servername, addr string, tlsconfig *tls.Config) (smtpConnection, error) {
+func getSmtpConnection(sec Security, servername, addr string, tlsconfig *tls.Config) (smtpConnection, error) {
 	switch sec {
-	case smtpconst.NoSecurity, smtpconst.StartTlsSec:
+	case NoSecurity, StartTlsSec:
 		return newRegularConnection(servername, addr)
-	case smtpconst.SslTlsSec:
+	case SslTlsSec:
 		return newTLSConnection(servername, addr, tlsconfig)
 	default:
 		return nil, fmt.Errorf("unknown security type %s", sec)

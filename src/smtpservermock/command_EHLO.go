@@ -1,7 +1,5 @@
 package smtpservermock
 
-import "github.com/Sternisaea/smtpservermock/src/smtpconst"
-
 type cmdEHLO struct{}
 
 func (c *cmdEHLO) getPrefix() string {
@@ -16,7 +14,7 @@ func (c *cmdEHLO) execute(t *transmission, arg string) error {
 
 	rm := make([]string, 0, 6)
 	rm = append(rm, (*t).serverName+" says hello "+(*t).clientName)
-	if (*t).security == smtpconst.StartTlsSec && !(*t).starttlsActive {
+	if (*t).security == StartTlsSec && !(*t).starttlsActive {
 		rm = append(rm, "STARTTLS")
 	}
 

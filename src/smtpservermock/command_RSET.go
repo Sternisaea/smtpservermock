@@ -7,6 +7,7 @@ func (c *cmdRSET) getPrefix() string {
 }
 
 func (c *cmdRSET) execute(t *transmission, arg string) error {
+	err := (*t).writeResponse("250 OK")
 	(*t).initCurrentMessage()
-	return (*t).writeResponse("250 OK")
+	return err
 }

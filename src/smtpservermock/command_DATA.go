@@ -1,6 +1,8 @@
 package smtpservermock
 
-import "strings"
+import (
+	"strings"
+)
 
 type cmdDATA struct{}
 
@@ -17,14 +19,13 @@ func (c *cmdDATA) execute(t *transmission, arg string) error {
 		if err != nil {
 			return err
 		}
-		(*t).writeRaw(line)
+		(*t).rawBuffer = append((*t).rawBuffer, RawLine{Direction: RequestDir, Text: line})
 		if strings.TrimSuffix(line, endOfLine) == "." {
 			break
 		}
-		(*t).currentMessage.data += line
+		(*t).currentMessage.Data += line
 	}
-	(*t).messages = append((*t).messages, (*t).currentMessage)
-	(*t).messageCh <- connMessage{id: (*t).id, message: *(*t).currentMessage}
-	(*t).initCurrentMessage()
-	return (*t).writeResponse("250 Mail accepted")
+	err := (*t).writeResponse("250 Mail accepted")
+	(*t).sendMessage()
+	return err
 }
