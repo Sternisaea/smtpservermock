@@ -6,8 +6,6 @@ import (
 	"net"
 	"regexp"
 	"strings"
-
-	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
 var (
@@ -25,38 +23,40 @@ const (
 )
 
 type transmission struct {
-	security       smtpconst.Security
+	address        string
+	entryNo        int
+	security       Security
 	netConnection  net.Conn
 	serverName     string
 	starttlsConfig *tls.Config
 
-	reader    *bufio.Reader
-	writer    *bufio.Writer
-	id        string
-	messageCh chan<- connMessage
-	rawTextCh chan<- connRaw
-
 	clientName     string
 	connType       connectionType
 	starttlsActive bool
+	commands       []command
 	msgStatus      messageStatus
+	currentMessage *Message
+	rawBuffer      []RawLine
 
-	commands []command
-
-	messages       []*message
-	currentMessage *message
+	reader    *bufio.Reader
+	writer    *bufio.Writer
+	rawTextCh chan<- transmissionRawLines
+	messageCh chan<- transmissionMessage
 }
 
-func newTransmission(security smtpconst.Security, connection net.Conn, serverName string, id string, msgCh chan<- connMessage, rawCh chan<- connRaw) *transmission {
+func newTransmission(address string, entryNo int, security Security, connection net.Conn, serverName string, rawCh chan<- transmissionRawLines, msgCh chan<- transmissionMessage) *transmission {
 	return &transmission{
+		address:       address,
+		entryNo:       entryNo,
 		security:      security,
 		netConnection: connection,
 		serverName:    serverName,
-		reader:        bufio.NewReader(connection),
-		writer:        bufio.NewWriter(connection),
-		id:            id,
-		messageCh:     msgCh,
-		rawTextCh:     rawCh,
+
+		reader: bufio.NewReader(connection),
+		writer: bufio.NewWriter(connection),
+
+		rawTextCh: rawCh,
+		messageCh: msgCh,
 	}
 }
 
@@ -77,7 +77,7 @@ func (t *transmission) Process() error {
 		if err != nil {
 			return err
 		}
-		(*t).writeRaw(line)
+		(*t).rawBuffer = append((*t).rawBuffer, RawLine{Direction: RequestDir, Text: line})
 		line = strings.TrimSuffix(line, endOfLine)
 
 		found := false
@@ -101,6 +101,7 @@ func (t *transmission) Process() error {
 			continue
 		}
 		if (*t).connType == quitType {
+			(*t).flushRawBuffer()
 			return nil
 		}
 	}
@@ -118,23 +119,20 @@ func (t *transmission) writeResponse(resp string) error {
 	if !strings.HasSuffix(resp, endOfLine) {
 		resp += endOfLine
 	}
-	(*t).writeRaw(resp)
+	(*t).rawBuffer = append((*t).rawBuffer, RawLine{Direction: ResponseDir, Text: resp})
 	(*t).writer.WriteString(resp)
 	return (*t).writer.Flush()
 }
 
-func (t *transmission) writeRaw(rawtext string) {
-	(*t).rawTextCh <- connRaw{id: (*t).id, rawtext: rawtext}
-}
-
 func (t *transmission) initCurrentMessage() {
-	(*t).currentMessage = newMessage()
+	(*t).flushRawBuffer()
+	(*t).currentMessage = &Message{}
 	(*t).msgStatus = emptyMessage
 }
 
 func (t *transmission) setCommands() {
 	cmds := []command{&cmdEHLO{}, &cmdHELO{}, &cmdQuit{}, &cmdNOOP{}, &cmdHELP{}, &cmdRSET{}, &cmdVRFY{}}
-	if (*t).security == smtpconst.StartTlsSec && !(*t).starttlsActive {
+	if (*t).security == StartTlsSec && !(*t).starttlsActive {
 		cmds = append(cmds, []command{&cmdSTARTTLS{}}...)
 	}
 	switch (*t).connType {
@@ -144,4 +142,18 @@ func (t *transmission) setCommands() {
 		cmds = append(cmds, []command{&cmdMAILFROM{}, &cmdRCPTTO{}, &cmdDATA{}, &cmdAUTH{}}...)
 	}
 	(*t).commands = cmds
+}
+
+func (t *transmission) flushRawBuffer() {
+	if len((*t).rawBuffer) == 0 {
+		return
+	}
+	(*t).rawTextCh <- transmissionRawLines{address: (*t).address, entryNo: (*t).entryNo, lines: (*t).rawBuffer}
+	(*t).rawBuffer = []RawLine{}
+}
+
+func (t *transmission) sendMessage() {
+	(*t).messageCh <- transmissionMessage{address: (*t).address, entryNo: (*t).entryNo, message: *(*t).currentMessage}
+	(*t).initCurrentMessage()
+
 }

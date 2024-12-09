@@ -2,8 +2,6 @@ package smtpservermock
 
 import (
 	"strings"
-
-	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
 type cmdMAILFROM struct{}
@@ -16,7 +14,7 @@ func (c *cmdMAILFROM) execute(t *transmission, arg string) error {
 	if (*t).connType != heloType && (*t).connType != ehloType {
 		return (*t).writeResponse("503 Bad sequence of commands")
 	}
-	if (*t).security == smtpconst.StartTlsSec && !(*t).starttlsActive {
+	if (*t).security == StartTlsSec && !(*t).starttlsActive {
 		return (*t).writeResponse("530 Must issue a STARTTLS command first")
 	}
 	if (*t).msgStatus != emptyMessage {
@@ -29,7 +27,7 @@ func (c *cmdMAILFROM) execute(t *transmission, arg string) error {
 	}
 	email := strings.TrimPrefix(strings.TrimSuffix(texts[0], ">"), "<")
 	// Optional: check email
-	(*t).currentMessage.from = email
+	(*t).currentMessage.From = email
 	(*t).msgStatus = mailFromMessage
 	return (*t).writeResponse("250 OK")
 }

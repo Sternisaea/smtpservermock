@@ -21,7 +21,7 @@ func (c *cmdRCPTTO) execute(t *transmission, arg string) error {
 	}
 	email := strings.TrimPrefix(strings.TrimSuffix(texts[0], ">"), "<")
 	// Optional: check email
-	(*t).currentMessage.to = append((*t).currentMessage.to, email)
+	(*t).currentMessage.To = append((*t).currentMessage.To, email)
 	(*t).msgStatus = receiptToMessage
 	return (*t).writeResponse("250 OK")
 }

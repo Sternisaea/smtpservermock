@@ -2,8 +2,6 @@ package smtpservermock
 
 import (
 	"strings"
-
-	"github.com/Sternisaea/smtpservermock/src/smtpconst"
 )
 
 type cmdAUTH struct{}
@@ -24,8 +22,8 @@ func (c *cmdAUTH) execute(t *transmission, arg string) error {
 		// arg = strings.Join(words[1:], " ")
 	}
 
-	switch smtpconst.AuthenticationMethod(strings.ToLower(authText)) {
-	case smtpconst.PlainAuth:
+	switch AuthenticationMethod(strings.ToLower(authText)) {
+	case PlainAuth:
 		return (*t).writeResponse("235 Authentication successful")
 	default:
 		return (*t).writeResponse("504 Unrecognized authentication type")

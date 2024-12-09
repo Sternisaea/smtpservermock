@@ -3,50 +3,42 @@ package smtpservermock
 import (
 	"crypto/tls"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
-
-	"github.com/Sternisaea/smtpservermock/src/smtpconst"
-	"github.com/google/uuid"
+	"sync"
+	"time"
 )
 
 type SmtpServer struct {
 	name       string
-	security   smtpconst.Security
+	security   Security
 	address    string
 	connection smtpConnection
 	tlsconfig  *tls.Config
 
-	listener           net.Listener
-	connectionMessages ConnectionMessages
-	connectionRawText  ConnectionRawText
+	listener  net.Listener
+	rawTextCh chan transmissionRawLines
+	messageCh chan transmissionMessage
+
+	lockConnectResults sync.Mutex
+	connectionResults  map[string][]Result
 }
 
-type ConnectionMessages map[string][]CompletedMessage
+var (
+	timeout = 2000 * time.Millisecond
 
-type CompletedMessage struct {
-	From string
-	To   []string
-	Data string
-}
-
-type ConnectionRawText map[string][]string
-
-type connMessage struct {
-	id      string
-	message message
-}
-
-type connRaw struct {
-	id      string
-	rawtext string
-}
+	ErrUnknownConnectionAddress  = errors.New("unknown address")
+	ErrUnknownConnectionSequence = errors.New("unkown connection sequence")
+	ErrUnkownMessageSequence     = errors.New("unknown message sequence")
+	ErrTimeout                   = errors.New("timeout waiting for clear channel buffer")
+)
 
 // NewSmtpServer creates a new instance of SmtpServer. Parameters are the type of security (e.g. No security, SSL-TLS, STARTTLS), a servername,
 // the server address (mail.example.com:587), path to PEM encoded public key and path to PEM encoded privat key.
 // Leave the paths empty if no security is applied. An error is returned for an unknown security type or invalid keys
-func NewSmtpServer(sec smtpconst.Security, servername, addr, certFile, keyFile string) (*SmtpServer, error) {
+func NewSmtpServer(sec Security, servername, addr, certFile, keyFile string) (*SmtpServer, error) {
 	tlsconfig, err := getTLSConfig(sec, certFile, keyFile)
 	if err != nil {
 		return nil, err
@@ -55,14 +47,12 @@ func NewSmtpServer(sec smtpconst.Security, servername, addr, certFile, keyFile s
 	if err != nil {
 		return nil, err
 	}
-	conMsgs := make(ConnectionMessages)
-	conRawTexts := make(ConnectionRawText)
-	return &SmtpServer{name: servername, security: sec, address: addr, connection: smtpconn, tlsconfig: tlsconfig, connectionMessages: conMsgs, connectionRawText: conRawTexts}, nil
+	return &SmtpServer{name: servername, security: sec, address: addr, connection: smtpconn, tlsconfig: tlsconfig, connectionResults: make(map[string][]Result)}, nil
 }
 
-func getTLSConfig(sec smtpconst.Security, certFile, keyFile string) (*tls.Config, error) {
+func getTLSConfig(sec Security, certFile, keyFile string) (*tls.Config, error) {
 	switch sec {
-	case smtpconst.StartTlsSec, smtpconst.SslTlsSec:
+	case StartTlsSec, SslTlsSec:
 		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
 		if err != nil {
 			return nil, err
@@ -84,17 +74,30 @@ func (s *SmtpServer) ListenAndServe() error {
 		return err
 	}
 
-	msgCh := make(chan connMessage)
-	rawCh := make(chan connRaw)
-	go s.handleMessages(msgCh)
-	go s.handleRawText(rawCh)
-	go s.listening(msgCh, rawCh)
+	(*s).rawTextCh = make(chan transmissionRawLines)
+	(*s).messageCh = make(chan transmissionMessage)
+	go func() {
+		for trsRaw := range (*s).rawTextCh {
+			(*s).lockConnectResults.Lock()
+			(*s).connectionResults[trsRaw.address][trsRaw.entryNo-1].Raw = append((*s).connectionResults[trsRaw.address][trsRaw.entryNo-1].Raw, trsRaw.lines...)
+			(*s).lockConnectResults.Unlock()
+		}
+	}()
+
+	go func() {
+		for trsMsg := range (*s).messageCh {
+			(*s).lockConnectResults.Lock()
+			(*s).connectionResults[trsMsg.address][trsMsg.entryNo-1].Messages = append((*s).connectionResults[trsMsg.address][trsMsg.entryNo-1].Messages, trsMsg.message)
+			(*s).lockConnectResults.Unlock()
+		}
+	}()
+	go s.listening((*s).rawTextCh, (*s).messageCh)
 	return nil
 }
 
-func (s *SmtpServer) listening(msgCh chan<- connMessage, rawCh chan<- connRaw) {
-	defer close(msgCh)
+func (s *SmtpServer) listening(rawCh chan<- transmissionRawLines, msgCh chan<- transmissionMessage) {
 	defer close(rawCh)
+	defer close(msgCh)
 	for {
 		conn, err := (*s).listener.Accept()
 		if err != nil {
@@ -104,8 +107,32 @@ func (s *SmtpServer) listening(msgCh chan<- connMessage, rawCh chan<- connRaw) {
 			log.Printf("Connection error: %s", err)
 			return
 		}
-		go s.handle(conn, msgCh, rawCh)
+
+		addr := conn.RemoteAddr().String()
+		(*s).lockConnectResults.Lock()
+		entryNo := len((*s).connectionResults[addr]) + 1
+		(*s).connectionResults[addr] = append((*s).connectionResults[addr], Result{EntryNo: entryNo, Start: time.Now()})
+		(*s).lockConnectResults.Unlock()
+		go s.handle(conn, addr, entryNo, rawCh, msgCh)
 	}
+}
+
+func (s *SmtpServer) handle(conn net.Conn, address string, entryNo int, rawCh chan<- transmissionRawLines, msgCh chan<- transmissionMessage) {
+	defer conn.Close()
+	trm := newTransmission(address, entryNo, (*s).security, conn, (*s).name, rawCh, msgCh)
+	if (*s).security == StartTlsSec {
+		trm.SetStartTLSConfig((*s).tlsconfig)
+	}
+	if err := trm.Process(); err != nil {
+		if err == io.EOF {
+			log.Printf("Connection closed by client (EOF)")
+		} else {
+			log.Printf("Connection error: %s", err)
+		}
+	}
+	(*s).lockConnectResults.Lock()
+	(*s).connectionResults[address][entryNo-1].End = time.Now()
+	(*s).lockConnectResults.Unlock()
 }
 
 // Shutdown gracefully shuts down the SMTP server
@@ -114,48 +141,80 @@ func (s *SmtpServer) Shutdown() error {
 	return (*s).connection.shutdownListener((*s).listener)
 }
 
-func (s *SmtpServer) handle(conn net.Conn, msgCh chan<- connMessage, rawCh chan<- connRaw) {
-	defer conn.Close()
-
-	id := uuid.New().String()
-	trsm := newTransmission((*s).security, conn, (*s).name, id, msgCh, rawCh)
-	if (*s).security == smtpconst.StartTlsSec {
-		trsm.SetStartTLSConfig((*s).tlsconfig)
-	}
-	if err := trsm.Process(); err != nil {
-		if err == io.EOF {
-			log.Printf("Connection closed by client (EOF)")
-		} else {
-			log.Printf("Connection error: %s", err)
+// GetConnectionAddresses returns all connection addresses that made a connection to the SMTP server.
+func (s *SmtpServer) GetConnectionAddresses() ([]string, error) {
+	t := time.Now()
+	// Check if message or raw text is still in the channel buffer
+	for {
+		if len((*s).messageCh) == 0 && len((*s).rawTextCh) == 0 {
+			break
+		}
+		if time.Since(t) > timeout {
+			return nil, ErrTimeout
 		}
 	}
+
+	addrs := make([]string, 0, len((*s).connectionResults))
+	for a := range (*s).connectionResults {
+		addrs = append(addrs, a)
+	}
+	return addrs, nil
 }
 
-func (s *SmtpServer) handleMessages(msgCh <-chan connMessage) {
-	for connMsg := range msgCh {
-		msg := CompletedMessage{
-			From: connMsg.message.from,
-			To:   connMsg.message.to,
-			Data: connMsg.message.data,
+// GetResultMessage returns the mail message received by the SMTP server for a given connection address, connection sequence number
+// and message sequence number. The connection sequence number is usually 1, but can be increased if a subsequent connection would use
+// the same TCP port (which is very unlikely). The message sequence number starts with 1 and is increased by 1 for every new message
+// within the same connection.
+func (s *SmtpServer) GetResultMessage(connectionAddress string, connectionSequenceNo int, messageSequenceNo int) (*Message, error) {
+	crs, ok := (*s).connectionResults[connectionAddress]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownConnectionAddress, connectionAddress)
+	}
+	if len(crs) < connectionSequenceNo {
+		return nil, fmt.Errorf("%w: %d", ErrUnknownConnectionSequence, connectionSequenceNo)
+	}
+	res := crs[connectionSequenceNo-1]
+
+	if len(res.Messages) < messageSequenceNo {
+		t := time.Now()
+		// Check if message is still in the channel buffer
+		for {
+			if len((*s).messageCh) == 0 {
+				break
+			}
+			if time.Since(t) > timeout {
+				return nil, ErrTimeout
+			}
 		}
-		(*s).connectionMessages[connMsg.id] = append((*s).connectionMessages[connMsg.id], msg)
 	}
-}
-
-func (s *SmtpServer) handleRawText(rawCh <-chan connRaw) {
-	for connRaw := range rawCh {
-		(*s).connectionRawText[connRaw.id] = append((*s).connectionRawText[connRaw.id], connRaw.rawtext)
+	if len(res.Messages) < messageSequenceNo {
+		return nil, fmt.Errorf("%w: %d", ErrUnkownMessageSequence, messageSequenceNo)
 	}
+	return &res.Messages[messageSequenceNo-1], nil
 }
 
-// GetConnectionMessages returns the e-mail messages received by the SMTP Server
-// For every connection an unique GUID is created
-func (s *SmtpServer) GetConnectionMessages() ConnectionMessages {
-	return (*s).connectionMessages
-}
+// GetResultRawText returns the raw text received by the SMTP server for a given connection address and connection sequence number.
+// The connection sequence number is usually 1, but can be increased if a subsequent connection would use the same TCP port (which
+// is very unlikely).
+func (s *SmtpServer) GetResultRawText(connectionAddress string, connectionSequenceNo int) ([]RawLine, error) {
+	crs, ok := (*s).connectionResults[connectionAddress]
+	if !ok {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownConnectionAddress, connectionAddress)
+	}
+	if len(crs) < connectionSequenceNo {
+		return nil, fmt.Errorf("%w: %d", ErrUnknownConnectionSequence, connectionSequenceNo)
+	}
+	cr := crs[connectionSequenceNo-1]
 
-// GetRawText returns the e-mail commands received and sent by the SMTP Server
-// For every connection an unique GUID is created
-func (s *SmtpServer) GetRawText() ConnectionRawText {
-	return (*s).connectionRawText
+	t := time.Now()
+	// Check if raw text is still in the channel buffer
+	for {
+		if len((*s).rawTextCh) == 0 {
+			break
+		}
+		if time.Since(t) > timeout {
+			return nil, ErrTimeout
+		}
+	}
+	return cr.Raw, nil
 }
