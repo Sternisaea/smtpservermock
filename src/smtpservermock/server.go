@@ -153,20 +153,19 @@ func (s *SmtpServer) GetConnectionAddresses() ([]string, error) {
 // the same TCP port (which is very unlikely). The message sequence number starts with 1 and is increased by 1 for every new message
 // within the same connection.
 func (s *SmtpServer) GetResultMessage(connectionAddress string, connectionSequenceNo int, messageSequenceNo int) (*Message, error) {
-	crs, ok := (*s).connectionResults[connectionAddress]
+	_, ok := (*s).connectionResults[connectionAddress]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnknownConnectionAddress, connectionAddress)
 	}
-	if len(crs) < connectionSequenceNo {
+	if len((*s).connectionResults[connectionAddress]) < connectionSequenceNo {
 		return nil, fmt.Errorf("%w: %d", ErrUnknownConnectionSequence, connectionSequenceNo)
 	}
-	res := crs[connectionSequenceNo-1]
 
-	if len(res.Messages) < messageSequenceNo {
+	if len((*s).connectionResults[connectionAddress][connectionSequenceNo-1].Messages) < messageSequenceNo {
 		t := time.Now()
 		for {
 			time.Sleep(10 * time.Millisecond)
-			if len(res.Messages) >= messageSequenceNo {
+			if len((*s).connectionResults[connectionAddress][connectionSequenceNo-1].Messages) >= messageSequenceNo {
 				break
 			}
 			if time.Since(t) > timeout {
@@ -174,7 +173,7 @@ func (s *SmtpServer) GetResultMessage(connectionAddress string, connectionSequen
 			}
 		}
 	}
-	return &res.Messages[messageSequenceNo-1], nil
+	return &(*s).connectionResults[connectionAddress][connectionSequenceNo-1].Messages[messageSequenceNo-1], nil
 }
 
 // GetResultRawText returns the raw text received by the SMTP server for a given connection address and connection sequence number.
