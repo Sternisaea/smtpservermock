@@ -180,14 +180,13 @@ func (s *SmtpServer) GetResultMessage(connectionAddress string, connectionSequen
 // The connection sequence number is usually 1, but can be increased if a subsequent connection would use the same TCP port (which
 // is very unlikely).
 func (s *SmtpServer) GetResultRawText(connectionAddress string, connectionSequenceNo int) ([]RawLine, error) {
-	crs, ok := (*s).connectionResults[connectionAddress]
+	_, ok := (*s).connectionResults[connectionAddress]
 	if !ok {
 		return nil, fmt.Errorf("%w: %s", ErrUnknownConnectionAddress, connectionAddress)
 	}
-	if len(crs) < connectionSequenceNo {
+	if len((*s).connectionResults[connectionAddress]) < connectionSequenceNo {
 		return nil, fmt.Errorf("%w: %d", ErrUnknownConnectionSequence, connectionSequenceNo)
 	}
-	cr := crs[connectionSequenceNo-1]
 
 	t := time.Now()
 	for {
@@ -198,5 +197,5 @@ func (s *SmtpServer) GetResultRawText(connectionAddress string, connectionSequen
 			return nil, ErrTimeout
 		}
 	}
-	return cr.Raw, nil
+	return (*s).connectionResults[connectionAddress][connectionSequenceNo].Raw, nil
 }
