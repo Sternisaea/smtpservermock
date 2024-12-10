@@ -124,9 +124,7 @@ func (s *SmtpServer) handle(conn net.Conn, address string, entryNo int, rawCh ch
 		trm.SetStartTLSConfig((*s).tlsconfig)
 	}
 	if err := trm.Process(); err != nil {
-		if err == io.EOF {
-			log.Printf("Connection closed by client (EOF)")
-		} else {
+		if err != io.EOF {
 			log.Printf("Connection error: %s", err)
 		}
 	}
@@ -143,17 +141,6 @@ func (s *SmtpServer) Shutdown() error {
 
 // GetConnectionAddresses returns all connection addresses that made a connection to the SMTP server.
 func (s *SmtpServer) GetConnectionAddresses() ([]string, error) {
-	t := time.Now()
-	// Check if message or raw text is still in the channel buffer
-	for {
-		if len((*s).messageCh) == 0 && len((*s).rawTextCh) == 0 {
-			break
-		}
-		if time.Since(t) > timeout {
-			return nil, ErrTimeout
-		}
-	}
-
 	addrs := make([]string, 0, len((*s).connectionResults))
 	for a := range (*s).connectionResults {
 		addrs = append(addrs, a)
@@ -177,18 +164,15 @@ func (s *SmtpServer) GetResultMessage(connectionAddress string, connectionSequen
 
 	if len(res.Messages) < messageSequenceNo {
 		t := time.Now()
-		// Check if message is still in the channel buffer
 		for {
-			if len((*s).messageCh) == 0 {
+			time.Sleep(10 * time.Millisecond)
+			if len(res.Messages) >= messageSequenceNo {
 				break
 			}
 			if time.Since(t) > timeout {
-				return nil, ErrTimeout
+				return nil, fmt.Errorf("%w: %d", ErrUnkownMessageSequence, messageSequenceNo)
 			}
 		}
-	}
-	if len(res.Messages) < messageSequenceNo {
-		return nil, fmt.Errorf("%w: %d", ErrUnkownMessageSequence, messageSequenceNo)
 	}
 	return &res.Messages[messageSequenceNo-1], nil
 }
@@ -207,7 +191,6 @@ func (s *SmtpServer) GetResultRawText(connectionAddress string, connectionSequen
 	cr := crs[connectionSequenceNo-1]
 
 	t := time.Now()
-	// Check if raw text is still in the channel buffer
 	for {
 		if len((*s).rawTextCh) == 0 {
 			break
